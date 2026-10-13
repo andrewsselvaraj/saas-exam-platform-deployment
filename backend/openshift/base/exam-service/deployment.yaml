@@ -1,14 +1,13 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: exam-backend
+  name: exam-service
   labels:
-    app.kubernetes.io/name: exam-backend
     app.kubernetes.io/component: backend
   annotations:
-    # Roll out automatically whenever a build pushes a new exam-backend:latest.
+    # Roll out automatically whenever a build pushes a new exam-service:latest.
     image.openshift.io/triggers: >-
-      [{"from":{"kind":"ImageStreamTag","name":"exam-backend:latest"},"fieldPath":"spec.template.spec.containers[?(@.name==\"exam-backend\")].image"}]
+      [{"from":{"kind":"ImageStreamTag","name":"exam-service:latest"},"fieldPath":"spec.template.spec.containers[?(@.name==\"exam-service\")].image"}]
 spec:
   # H2 in file mode allows one process per database file, and the volume is
   # ReadWriteOnce. Keep a single replica and stop the old pod before starting
@@ -18,11 +17,11 @@ spec:
     type: Recreate
   selector:
     matchLabels:
-      app.kubernetes.io/name: exam-backend
+      app.kubernetes.io/name: exam-service
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: exam-backend
+        app.kubernetes.io/name: exam-service
         app.kubernetes.io/component: backend
     spec:
       securityContext:
@@ -30,42 +29,44 @@ spec:
         seccompProfile:
           type: RuntimeDefault
       containers:
-        - name: exam-backend
-          image: exam-backend:latest
+        - name: exam-service
+          image: exam-service:latest
           imagePullPolicy: Always
           ports:
             - name: http
-              containerPort: 8080
+              containerPort: 8083
               protocol: TCP
           envFrom:
             - configMapRef:
-                name: exam-backend-config
+                name: exam-service-config
             - secretRef:
-                name: exam-backend-db
+                name: exam-service-db
           resources:
             requests:
               cpu: 250m
               memory: 512Mi
             limits:
               memory: 1Gi
-          # The app has no actuator, so probes use the lightweight org list.
-          # First start runs the Flyway seed migration, hence the long startup window.
+          # The first start runs the Flyway seed migration, hence the long startup window.
+          # Spring Boot exposes these health groups automatically when it runs on Kubernetes.
           startupProbe:
             httpGet:
-              path: /api/orgs
+              path: /actuator/health/liveness
               port: http
             periodSeconds: 10
             failureThreshold: 30
           readinessProbe:
             httpGet:
-              path: /api/orgs
+              path: /actuator/health/readiness
               port: http
             periodSeconds: 10
             timeoutSeconds: 3
           livenessProbe:
-            tcpSocket:
+            httpGet:
+              path: /actuator/health/liveness
               port: http
             periodSeconds: 20
+            timeoutSeconds: 3
             failureThreshold: 3
           securityContext:
             allowPrivilegeEscalation: false
@@ -77,5 +78,5 @@ spec:
       volumes:
         - name: data
           persistentVolumeClaim:
-            claimName: exam-backend-data
+            claimName: exam-service-data
       terminationGracePeriodSeconds: 45

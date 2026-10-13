@@ -1,0 +1,11 @@
+# Holds exam-service's H2 database file (/data/examdb.mv.db).
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: exam-service-data
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi

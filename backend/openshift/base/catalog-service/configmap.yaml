@@ -1,0 +1,16 @@
+# Overrides for catalog-service's application.yml.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: catalog-service-config
+data:
+  PORT: "8081"
+  # Same H2 settings as local, but the file lives on the persistent volume mounted at /data.
+  DB_URL: "jdbc:h2:file:/data/catalogdb;MODE=MySQL;DATABASE_TO_LOWER=TRUE;CASE_INSENSITIVE_IDENTIFIERS=TRUE"
+  # The H2 web console is a dev tool; keep it off in the cluster.
+  SPRING_H2_CONSOLE_ENABLED: "false"
+  SERVER_SHUTDOWN: "graceful"
+  # Turns on /actuator/health/liveness and /readiness used by the probes.
+  MANAGEMENT_ENDPOINT_HEALTH_PROBES_ENABLED: "true"
+  JAVA_MAX_RAM_RATIO: "75"
+  QUESTION_SERVICE_URL: "http://question-service:8082"

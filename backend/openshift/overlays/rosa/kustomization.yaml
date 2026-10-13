@@ -11,7 +11,6 @@ patches:
   # gp3-csi is the default EBS storage class on ROSA.
   - target:
       kind: PersistentVolumeClaim
-      name: exam-backend-data
     patch: |-
       - op: add
         path: /spec/storageClassName
