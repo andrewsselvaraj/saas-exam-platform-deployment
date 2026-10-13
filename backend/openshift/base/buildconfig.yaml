@@ -1,0 +1,36 @@
+# Builds the backend from GitHub with the Red Hat OpenJDK 17 S2I builder.
+# The builder runs `mvn package -DskipTests` and copies target/*.jar to /deployments,
+# so the backend repo needs no Dockerfile. Start a build with:
+#   oc start-build exam-backend --follow
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: exam-backend
+  labels:
+    app.kubernetes.io/name: exam-backend
+spec:
+  runPolicy: Serial
+  source:
+    type: Git
+    git:
+      uri: https://github.com/andrewsselvaraj/saas-exam-platform-backend.git
+      ref: main
+  strategy:
+    type: Source
+    sourceStrategy:
+      from:
+        kind: DockerImage
+        name: registry.access.redhat.com/ubi9/openjdk-17:1.21
+      env:
+        - name: MAVEN_ARGS
+          value: "-B package -DskipTests"
+  output:
+    to:
+      kind: ImageStreamTag
+      name: exam-backend:latest
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      memory: 2Gi

@@ -1,0 +1,13 @@
+# Holds the H2 database file (/data/examdb.mv.db).
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: exam-backend-data
+  labels:
+    app.kubernetes.io/name: exam-backend
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi

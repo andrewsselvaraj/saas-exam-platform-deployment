@@ -1,0 +1,17 @@
+# Public HTTPS endpoint on the cluster's default ingress (ROSA puts it behind an AWS load balancer).
+# Leave spec.host empty to get exam-backend-<namespace>.apps.<cluster-domain>.
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: exam-backend
+  labels:
+    app.kubernetes.io/name: exam-backend
+spec:
+  to:
+    kind: Service
+    name: exam-backend
+  port:
+    targetPort: http
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect

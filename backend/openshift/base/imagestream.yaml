@@ -1,0 +1,9 @@
+apiVersion: image.openshift.io/v1
+kind: ImageStream
+metadata:
+  name: exam-backend
+  labels:
+    app.kubernetes.io/name: exam-backend
+spec:
+  lookupPolicy:
+    local: true
