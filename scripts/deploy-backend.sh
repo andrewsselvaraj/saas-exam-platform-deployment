@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Deploys the backend microservices to the OpenShift project you are logged in to (`oc login`, `oc project`).
 #   ./scripts/deploy-backend.sh                  H2 databases on volumes (overlays/sandbox)
-#   OVERLAY=mysql ./scripts/deploy-backend.sh    existing m2its MySQL database (overlays/mysql)
+#   OVERLAY=mysql ./scripts/deploy-backend.sh    existing etfdb_dev MySQL schema (overlays/mysql)
 # Set NAMESPACE to deploy into another existing project.
 set -euo pipefail
 
