@@ -9,6 +9,8 @@ metadata:
     image.openshift.io/triggers: >-
       [{"from":{"kind":"ImageStreamTag","name":"api-gateway:latest"},"fieldPath":"spec.template.spec.containers[?(@.name==\"api-gateway\")].image"}]
 spec:
+  # Keep 2 old ReplicaSets for rollback; the Developer Sandbox allows 30 per project.
+  revisionHistoryLimit: 2
   # Stateless, so it can run more than one copy and roll without downtime.
   replicas: 2
   strategy:

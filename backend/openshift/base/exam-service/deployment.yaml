@@ -9,9 +9,11 @@ metadata:
     image.openshift.io/triggers: >-
       [{"from":{"kind":"ImageStreamTag","name":"exam-service:latest"},"fieldPath":"spec.template.spec.containers[?(@.name==\"exam-service\")].image"}]
 spec:
+  # Keep 2 old ReplicaSets for rollback; the Developer Sandbox allows 30 per project.
+  revisionHistoryLimit: 2
   # H2 in file mode allows one process per database file, and the volume is
   # ReadWriteOnce. Keep a single replica and stop the old pod before starting
-  # the new one. Move to a server database (e.g. Amazon RDS) before scaling out.
+  # the new one. overlays/mysql moves the data to a MySQL server instead.
   replicas: 1
   strategy:
     type: Recreate

@@ -21,6 +21,9 @@ spec:
       env:
         - name: MAVEN_ARGS
           value: "-B package -DskipTests -pl exam-service -am"
+        # UBI 9 OpenJDK builders read MAVEN_S2I_ARTIFACT_DIRS; ARTIFACT_DIR is only for older images.
+        - name: MAVEN_S2I_ARTIFACT_DIRS
+          value: exam-service/target
         - name: ARTIFACT_DIR
           value: exam-service/target
   output:

@@ -1,6 +1,5 @@
 # The only public endpoint: clients reach every service through the gateway.
-# ROSA's default ingress puts it behind an AWS load balancer; leave spec.host empty to get
-# api-gateway-<namespace>.apps.<cluster-domain>.
+# Leave spec.host empty to get api-gateway-<namespace>.apps.<cluster-domain>.
 apiVersion: route.openshift.io/v1
 kind: Route
 metadata:

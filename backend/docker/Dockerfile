@@ -1,5 +1,5 @@
 # One image per microservice, built from source, for builds outside OpenShift
-# (for example to push to Amazon ECR). In-cluster builds use the S2I BuildConfigs instead.
+# (for example to push to an external registry). In-cluster builds use the S2I BuildConfigs instead.
 #
 # Build from a checkout of the backend repo, once per service:
 #   docker build -f ../saas-exam-platform-deployment/backend/docker/Dockerfile \
