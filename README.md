@@ -9,9 +9,9 @@ microservices (Spring Boot 3.5, Java 17) to OpenShift (tested on the Red Hat Dev
 | Service            | Port | Database                                   | Exposed                 |
 |--------------------|------|--------------------------------------------|-------------------------|
 | `api-gateway`      | 8080 | none                                       | public HTTPS Route      |
-| `catalog-service`  | 8081 | H2 `catalogdb` on a volume, or MySQL `m2its`  | inside the cluster only |
-| `question-service` | 8082 | H2 `questiondb` on a volume, or MySQL `m2its` | inside the cluster only |
-| `exam-service`     | 8083 | H2 `examdb` on a volume, or MySQL `m2its`     | inside the cluster only |
+| `catalog-service`  | 8081 | H2 `catalogdb` on a volume, or MySQL `etfdb_dev` | inside the cluster only |
+| `question-service` | 8082 | H2 `questiondb` on a volume, or MySQL `etfdb_dev`| inside the cluster only |
+| `exam-service`     | 8083 | H2 `examdb` on a volume, or MySQL `etfdb_dev` | inside the cluster only |
 
 Clients only talk to the gateway, which routes `/api/**` to the owning service. The services call each other
 through their in-cluster Service names (`http://catalog-service:8081`, ...).
@@ -22,7 +22,7 @@ backend/
   openshift/base/<service>/         ImageStream, BuildConfig (S2I), ConfigMap, Deployment, Service,
                                     plus PVC + secret.example.yaml (data services) or Route (gateway)
   openshift/overlays/sandbox/       current project, default storage class, 1Gi volumes, 1 gateway (H2)
-  openshift/overlays/mysql/         sandbox + data services on the existing m2its MySQL server, no volumes
+  openshift/overlays/mysql/         sandbox + data services on the existing etfdb_dev MySQL schema, no volumes
 scripts/
   deploy-backend.sh                 creates the DB secrets, applies an overlay, builds all four services, rolls out
   remove-monolith.sh                removes the old single exam-backend deployment, after asking
@@ -49,18 +49,18 @@ The Developer Sandbox scales deployments to zero after 12 hours; bring them back
 If the old single-backend deployment (`exam-backend`) is still running in the project, remove it once the
 microservices are up with `./scripts/remove-monolith.sh`. It deletes that deployment's data volume.
 
-### Using the existing m2its MySQL database
+### Using the existing MySQL database (etfdb_dev)
 
-`overlays/mysql` points the three data services at the existing `m2its` database on `63.142.240.31` instead of H2
+`overlays/mysql` points the three data services at the existing `etfdb_dev` schema on `63.142.240.31` instead of H2
 volumes. It only connects: nothing is created in that database (`createDatabaseIfNotExist=false`, Flyway off,
 Hibernate `ddl-auto=validate`). It needs the backend's MySQL support (driver, `*_v_two` table names).
 
 1. On the MySQL server: `bind-address = 0.0.0.0`, allow TCP 3306 from the cluster's egress IP only, and make sure the
    app's MySQL login is allowed from that IP (`'<user>'@'<egress-ip>'`, or a `'<user>'@'%'` login with `REQUIRE SSL`).
    Find the egress IP with `oc run ip --rm -i --restart=Never --image=registry.access.redhat.com/ubi9/ubi-minimal -- curl -s https://checkip.amazonaws.com`.
-2. Put that login in each service's secret:
-   `oc set data secret/<service>-db SPRING_DATASOURCE_USERNAME=<user> SPRING_DATASOURCE_PASSWORD=<password>`
-   (for `catalog-service`, `question-service` and `exam-service`).
+2. Put that login in the `saas-exam-mysql` secret, shared by the three data services:
+   `oc create secret generic saas-exam-mysql --from-literal=SPRING_DATASOURCE_USERNAME=<user> --from-literal=SPRING_DATASOURCE_PASSWORD=<password>`
+   The `<service>-db` secrets keep the H2 logins, so `./scripts/deploy-backend.sh` (H2) still works afterwards.
 3. `OVERLAY=mysql ./scripts/deploy-backend.sh`
 
 Switching from H2 leaves the old `<service>-data` volumes in place; delete them with

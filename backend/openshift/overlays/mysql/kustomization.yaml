@@ -1,18 +1,20 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
-# Developer Sandbox, with the data services on the existing m2its MySQL database (63.142.240.31)
-# instead of H2 files on volumes. Needs backend changes from PR #3 (MySQL driver, *_v_two table names).
+# Developer Sandbox, with the data services on the existing MySQL schema etfdb_dev (63.142.240.31)
+# instead of H2 files on volumes. Needs the backend's MySQL support (driver, *_v_two table names).
 #
 # Before deploying:
 #   - the server must accept connections on 3306 from the cluster's egress IP;
-#   - each <service>-db Secret must hold the MySQL username and password:
-#       oc set data secret/catalog-service-db SPRING_DATASOURCE_USERNAME=... SPRING_DATASOURCE_PASSWORD=...
+#   - the saas-exam-mysql Secret must hold the MySQL login (shared by the three data services):
+#       oc create secret generic saas-exam-mysql \
+#         --from-literal=SPRING_DATASOURCE_USERNAME=... --from-literal=SPRING_DATASOURCE_PASSWORD=...
+#     The <service>-db Secrets keep the H2 logins, so switching back to overlays/sandbox still works.
 resources:
   - ../sandbox
 
 patches:
-  # Connect to the existing m2its database only. Nothing is ever created in it:
+  # Connect to the existing etfdb_dev schema only. Nothing is ever created in it:
   #   createDatabaseIfNotExist=false  the driver fails instead of creating a missing database
   #   SPRING_FLYWAY_ENABLED=false      no migrations, no tables, no seed data
   #   ddl-auto=validate                Hibernate only checks the existing tables, never changes them
@@ -22,7 +24,7 @@ patches:
     patch: |-
       - op: replace
         path: /data/DB_URL
-        value: "jdbc:mysql://63.142.240.31:3306/m2its?createDatabaseIfNotExist=false&sslMode=REQUIRED&connectionTimeZone=UTC"
+        value: "jdbc:mysql://63.142.240.31:3306/etfdb_dev?createDatabaseIfNotExist=false&sslMode=REQUIRED&connectionTimeZone=UTC"
       - op: add
         path: /data/SPRING_FLYWAY_ENABLED
         value: "false"
@@ -30,12 +32,16 @@ patches:
         path: /data/SPRING_JPA_HIBERNATE_DDL_AUTO
         value: "validate"
 
-  # The data lives on the MySQL server now: drop the H2 volumes, and roll updates without stopping
-  # the old pod first.
+  # The data lives on the MySQL server now: use the MySQL login, drop the H2 volumes, and roll updates
+  # without stopping the old pod first.
   - target:
       kind: Deployment
       name: (catalog|question|exam)-service
     patch: |-
+      # envFrom[1] is the <service>-db Secret in the base Deployment.
+      - op: replace
+        path: /spec/template/spec/containers/0/envFrom/1/secretRef/name
+        value: saas-exam-mysql
       - op: remove
         path: /spec/template/spec/volumes
       - op: remove

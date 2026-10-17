@@ -14,16 +14,17 @@ DB_SERVICES=(catalog-service question-service exam-service)
 NAMESPACE="${NAMESPACE:-$(oc project -q)}"
 oc project "$NAMESPACE" >/dev/null
 
-# Database credentials, one secret per service that owns a database: generated once,
+# The MySQL overlay uses one existing login (saas-exam-mysql), which must be created by hand.
+if [ "$OVERLAY" = mysql ] && ! oc get secret saas-exam-mysql >/dev/null 2>&1; then
+  echo "Secret saas-exam-mysql is missing. Create it with the MySQL login for etfdb_dev:" >&2
+  echo "  oc create secret generic saas-exam-mysql --from-literal=SPRING_DATASOURCE_USERNAME=<user> --from-literal=SPRING_DATASOURCE_PASSWORD=<password>" >&2
+  exit 1
+fi
+
+# H2 credentials, one secret per service that owns a database: generated once,
 # never committed. H2 creates each database with them on first start.
 for svc in "${DB_SERVICES[@]}"; do
   if ! oc get secret "$svc-db" >/dev/null 2>&1; then
-    if [ "$OVERLAY" = mysql ]; then
-      # Generated credentials only work for H2, which creates the database with them.
-      echo "Secret $svc-db is missing. Create it with the MySQL login for m2its:" >&2
-      echo "  oc create secret generic $svc-db --from-literal=SPRING_DATASOURCE_USERNAME=<user> --from-literal=SPRING_DATASOURCE_PASSWORD=<password>" >&2
-      exit 1
-    fi
     oc create secret generic "$svc-db" \
       --from-literal=SPRING_DATASOURCE_USERNAME="${svc%-service}admin" \
       --from-literal=SPRING_DATASOURCE_PASSWORD="$(openssl rand -base64 24)"
