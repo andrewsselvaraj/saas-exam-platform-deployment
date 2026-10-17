@@ -5,14 +5,14 @@ OCP/Kubernetes deployment configuration for SaaS exam platform (backend, fronten
 
 Deploys the [saas-exam-platform-backend](https://github.com/andrewsselvaraj/saas-exam-platform-backend)
 microservices (Spring Boot 3.5, Java 17) to OpenShift (tested on the Red Hat Developer Sandbox).
-The data services use the existing MySQL schema `etfdb_dev` on `63.142.240.31`:
+The data services use the existing MySQL schema `ocp_connect` on `63.142.240.31`:
 
 | Service            | Port | Database                 | Exposed                 |
 |--------------------|------|--------------------------|-------------------------|
 | `api-gateway`      | 8080 | none                     | public HTTPS Route      |
-| `catalog-service`  | 8081 | MySQL `etfdb_dev`        | inside the cluster only |
-| `question-service` | 8082 | MySQL `etfdb_dev`        | inside the cluster only |
-| `exam-service`     | 8083 | MySQL `etfdb_dev`        | inside the cluster only |
+| `catalog-service`  | 8081 | MySQL `ocp_connect`        | inside the cluster only |
+| `question-service` | 8082 | MySQL `ocp_connect`        | inside the cluster only |
+| `exam-service`     | 8083 | MySQL `ocp_connect`        | inside the cluster only |
 
 Clients only talk to the gateway, which routes `/api/**` to the owning service. The services call each other
 through their in-cluster Service names (`http://catalog-service:8081`, ...).
@@ -56,7 +56,7 @@ scripts/
    oc create secret generic saas-exam-mysql \
      --from-literal=SPRING_DATASOURCE_USERNAME=<user> --from-literal=SPRING_DATASOURCE_PASSWORD=<password>
    ```
-3. **Schema**: `etfdb_dev` must already have `org_info`, `class_info`, `subject_info`, `chapter_info`,
+3. **Schema**: `ocp_connect` must already have `org_info`, `class_info`, `subject_info`, `chapter_info`,
    `question_info_v_two`, `answer_info_v_two` and `exam_info` (the layout of the legacy `m2its` dump).
 
 ### Deploy
@@ -89,7 +89,7 @@ Projects that ran the earlier H2 setup still have its volumes and secrets; remov
 - **Builds**: each BuildConfig runs the Red Hat OpenJDK 17 S2I builder on the multi-module repo with
   `-pl <service> -am`, so it builds only that service and `common-lib`; `MAVEN_S2I_ARTIFACT_DIRS` points the builder
   at that module's `target/` to pick up the jar.
-- **Database**: each data service's ConfigMap sets `DB_URL` to `etfdb_dev` and only connects: nothing is ever created
+- **Database**: each data service's ConfigMap sets `DB_URL` to `ocp_connect` and only connects: nothing is ever created
   in the database (`createDatabaseIfNotExist=false`, `SPRING_FLYWAY_ENABLED=false`, Hibernate `ddl-auto=validate`,
   which stops the service at startup if a table does not match the code). TLS is required (`sslMode=REQUIRED`).
 - **Secrets**: `SPRING_DATASOURCE_USERNAME` / `SPRING_DATASOURCE_PASSWORD` come from the `saas-exam-mysql` Secret,

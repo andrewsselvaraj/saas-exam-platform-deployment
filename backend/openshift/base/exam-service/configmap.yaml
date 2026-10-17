@@ -11,7 +11,7 @@ data:
   #   createDatabaseIfNotExist=false  fail instead of creating a missing database
   #   SPRING_FLYWAY_ENABLED=false      no migrations, no tables, no seed data
   #   ddl-auto=validate                Hibernate only checks the existing tables
-  DB_URL: "jdbc:mysql://127.0.0.1:3306/etfdb_dev?createDatabaseIfNotExist=false&sslMode=PREFERRED&allowPublicKeyRetrieval=true&connectionTimeZone=UTC"
+  DB_URL: "jdbc:mysql://127.0.0.1:3306/ocp_connect?createDatabaseIfNotExist=false&sslMode=PREFERRED&allowPublicKeyRetrieval=true&connectionTimeZone=UTC"
   SPRING_FLYWAY_ENABLED: "false"
   SPRING_JPA_HIBERNATE_DDL_AUTO: "validate"
   SERVER_SHUTDOWN: "graceful"
