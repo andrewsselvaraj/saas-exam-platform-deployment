@@ -11,12 +11,13 @@ metadata:
 spec:
   # Keep 2 old ReplicaSets for rollback; the Developer Sandbox allows 30 per project.
   revisionHistoryLimit: 2
-  # H2 in file mode allows one process per database file, and the volume is
-  # ReadWriteOnce. Keep a single replica and stop the old pod before starting
-  # the new one. overlays/mysql moves the data to a MySQL server instead.
+  # Stateless: the data lives in the MySQL database, so it can roll without downtime.
   replicas: 1
   strategy:
-    type: Recreate
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
   selector:
     matchLabels:
       app.kubernetes.io/name: question-service
@@ -41,22 +42,22 @@ spec:
           envFrom:
             - configMapRef:
                 name: question-service-config
+            # MySQL login shared by the data services (see ../secret.example.yaml).
             - secretRef:
-                name: question-service-db
+                name: saas-exam-mysql
           resources:
             requests:
               cpu: 250m
               memory: 512Mi
             limits:
               memory: 1Gi
-          # The first start runs the Flyway seed migration, hence the long startup window.
           # Spring Boot exposes these health groups automatically when it runs on Kubernetes.
           startupProbe:
             httpGet:
               path: /actuator/health/liveness
               port: http
             periodSeconds: 10
-            failureThreshold: 30
+            failureThreshold: 18
           readinessProbe:
             httpGet:
               path: /actuator/health/readiness
@@ -74,11 +75,4 @@ spec:
             allowPrivilegeEscalation: false
             capabilities:
               drop: ["ALL"]
-          volumeMounts:
-            - name: data
-              mountPath: /data
-      volumes:
-        - name: data
-          persistentVolumeClaim:
-            claimName: question-service-data
       terminationGracePeriodSeconds: 45

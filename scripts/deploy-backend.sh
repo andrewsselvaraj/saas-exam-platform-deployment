@@ -1,36 +1,24 @@
 #!/usr/bin/env bash
 # Deploys the backend microservices to the OpenShift project you are logged in to (`oc login`, `oc project`).
-#   ./scripts/deploy-backend.sh                  H2 databases on volumes (overlays/sandbox)
-#   OVERLAY=mysql ./scripts/deploy-backend.sh    existing etfdb_dev MySQL schema (overlays/mysql)
-# Set NAMESPACE to deploy into another existing project.
+# The data services use the existing MySQL schema etfdb_dev; their login comes from the saas-exam-mysql Secret.
+#   ./scripts/deploy-backend.sh
+# Set NAMESPACE to deploy into another existing project, OVERLAY to use another overlay (default: sandbox).
 set -euo pipefail
 
 OVERLAY="${OVERLAY:-sandbox}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SERVICES=(catalog-service question-service exam-service api-gateway)
-DB_SERVICES=(catalog-service question-service exam-service)
 
 [ -d "$ROOT/backend/openshift/overlays/$OVERLAY" ] || { echo "Unknown overlay: $OVERLAY" >&2; exit 1; }
 NAMESPACE="${NAMESPACE:-$(oc project -q)}"
 oc project "$NAMESPACE" >/dev/null
 
-# The MySQL overlay uses one existing login (saas-exam-mysql), which must be created by hand.
-if [ "$OVERLAY" = mysql ] && ! oc get secret saas-exam-mysql >/dev/null 2>&1; then
+# The MySQL login is never committed and never generated: create it by hand once.
+if ! oc get secret saas-exam-mysql >/dev/null 2>&1; then
   echo "Secret saas-exam-mysql is missing. Create it with the MySQL login for etfdb_dev:" >&2
   echo "  oc create secret generic saas-exam-mysql --from-literal=SPRING_DATASOURCE_USERNAME=<user> --from-literal=SPRING_DATASOURCE_PASSWORD=<password>" >&2
   exit 1
 fi
-
-# H2 credentials, one secret per service that owns a database: generated once,
-# never committed. H2 creates each database with them on first start.
-for svc in "${DB_SERVICES[@]}"; do
-  if ! oc get secret "$svc-db" >/dev/null 2>&1; then
-    oc create secret generic "$svc-db" \
-      --from-literal=SPRING_DATASOURCE_USERNAME="${svc%-service}admin" \
-      --from-literal=SPRING_DATASOURCE_PASSWORD="$(openssl rand -base64 24)"
-    oc label secret "$svc-db" app.kubernetes.io/name="$svc" app.kubernetes.io/part-of=saas-exam-platform
-  fi
-done
 
 oc apply -k "$ROOT/backend/openshift/overlays/$OVERLAY"
 

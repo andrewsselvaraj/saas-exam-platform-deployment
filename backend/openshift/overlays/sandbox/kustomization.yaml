@@ -8,13 +8,6 @@ resources:
   - ../../base
 
 patches:
-  # Default storage class, and 1Gi is plenty for the H2 files (the seed data is a few MB).
-  - target:
-      kind: PersistentVolumeClaim
-    patch: |-
-      - op: replace
-        path: /spec/resources/requests/storage
-        value: 1Gi
   # One gateway copy is enough here; the Sandbox scales everything to zero after 12 hours anyway.
   - target:
       kind: Deployment

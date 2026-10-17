@@ -4,14 +4,15 @@ OCP/Kubernetes deployment configuration for SaaS exam platform (backend, fronten
 ## Backend on OpenShift
 
 Deploys the [saas-exam-platform-backend](https://github.com/andrewsselvaraj/saas-exam-platform-backend)
-microservices (Spring Boot 3.5, Java 17) to OpenShift (tested on the Red Hat Developer Sandbox):
+microservices (Spring Boot 3.5, Java 17) to OpenShift (tested on the Red Hat Developer Sandbox).
+The data services use the existing MySQL schema `etfdb_dev` on `63.142.240.31`:
 
-| Service            | Port | Database                                   | Exposed                 |
-|--------------------|------|--------------------------------------------|-------------------------|
-| `api-gateway`      | 8080 | none                                       | public HTTPS Route      |
-| `catalog-service`  | 8081 | H2 `catalogdb` on a volume, or MySQL `etfdb_dev` | inside the cluster only |
-| `question-service` | 8082 | H2 `questiondb` on a volume, or MySQL `etfdb_dev`| inside the cluster only |
-| `exam-service`     | 8083 | H2 `examdb` on a volume, or MySQL `etfdb_dev` | inside the cluster only |
+| Service            | Port | Database                 | Exposed                 |
+|--------------------|------|--------------------------|-------------------------|
+| `api-gateway`      | 8080 | none                     | public HTTPS Route      |
+| `catalog-service`  | 8081 | MySQL `etfdb_dev`        | inside the cluster only |
+| `question-service` | 8082 | MySQL `etfdb_dev`        | inside the cluster only |
+| `exam-service`     | 8083 | MySQL `etfdb_dev`        | inside the cluster only |
 
 Clients only talk to the gateway, which routes `/api/**` to the owning service. The services call each other
 through their in-cluster Service names (`http://catalog-service:8081`, ...).
@@ -19,14 +20,27 @@ through their in-cluster Service names (`http://catalog-service:8081`, ...).
 ```
 backend/
   docker/Dockerfile                 image build outside the cluster, --build-arg SERVICE=...
-  openshift/base/<service>/         ImageStream, BuildConfig (S2I), ConfigMap, Deployment, Service,
-                                    plus PVC + secret.example.yaml (data services) or Route (gateway)
-  openshift/overlays/sandbox/       current project, default storage class, 1Gi volumes, 1 gateway (H2)
-  openshift/overlays/mysql/         sandbox + data services on the existing etfdb_dev MySQL schema, no volumes
+  openshift/base/<service>/         ImageStream, BuildConfig (S2I), ConfigMap, Deployment, Service (+ Route for the gateway)
+  openshift/base/secret.example.yaml  template for the saas-exam-mysql login (never applied)
+  openshift/overlays/sandbox/       Developer Sandbox: current project, one gateway copy
 scripts/
-  deploy-backend.sh                 creates the DB secrets, applies an overlay, builds all four services, rolls out
+  deploy-backend.sh                 checks the MySQL secret, applies the overlay, builds all four services, rolls out
   remove-monolith.sh                removes the old single exam-backend deployment, after asking
 ```
+
+### Before the first deploy
+
+1. **Network**: the MySQL server must accept connections on 3306 from the cluster: `bind-address = 0.0.0.0`, the
+   firewall allowing the cluster's egress IPs, and the MySQL login allowed from them. Find the egress IP with
+   `oc run ip --rm -i --restart=Never --image=registry.access.redhat.com/ubi9/ubi-minimal -- curl -s https://checkip.amazonaws.com`.
+   The Developer Sandbox uses more than one egress IP and they can change.
+2. **Login**: store the MySQL login once (never in git):
+   ```bash
+   oc create secret generic saas-exam-mysql \
+     --from-literal=SPRING_DATASOURCE_USERNAME=<user> --from-literal=SPRING_DATASOURCE_PASSWORD=<password>
+   ```
+3. **Schema**: `etfdb_dev` must already have `org_info`, `class_info`, `subject_info`, `chapter_info`,
+   `question_info_v_two`, `answer_info_v_two` and `exam_info` (the layout of the legacy `m2its` dump).
 
 ### Deploy
 
@@ -36,9 +50,9 @@ Log in with the token from the web console (your name → **Copy login command**
 ./scripts/deploy-backend.sh
 ```
 
-This deploys into the current project (set `NAMESPACE` for another existing one), generates a `<service>-db` secret
-for each data service, applies `backend/openshift/overlays/sandbox`, builds all four images from the backend repo's
-`main` branch in parallel and waits for every rollout. It prints the public API URL, e.g. `https://<route-host>/api/orgs`.
+This deploys into the current project (set `NAMESPACE` for another existing one), applies
+`backend/openshift/overlays/sandbox`, builds all four images from the backend repo's `main` branch in parallel and
+waits for every rollout. It prints the public API URL, e.g. `https://<route-host>/api/orgs`.
 
 Redeploy one service after pushing backend changes with `oc start-build <service> --follow`.
 To build a different branch, change `spec.source.git.ref` in `backend/openshift/base/<service>/buildconfig.yaml`.
@@ -49,38 +63,23 @@ The Developer Sandbox scales deployments to zero after 12 hours; bring them back
 If the old single-backend deployment (`exam-backend`) is still running in the project, remove it once the
 microservices are up with `./scripts/remove-monolith.sh`. It deletes that deployment's data volume.
 
-### Using the existing MySQL database (etfdb_dev)
-
-`overlays/mysql` points the three data services at the existing `etfdb_dev` schema on `63.142.240.31` instead of H2
-volumes. It only connects: nothing is created in that database (`createDatabaseIfNotExist=false`, Flyway off,
-Hibernate `ddl-auto=validate`). It needs the backend's MySQL support (driver, `*_v_two` table names).
-
-1. On the MySQL server: `bind-address = 0.0.0.0`, allow TCP 3306 from the cluster's egress IP only, and make sure the
-   app's MySQL login is allowed from that IP (`'<user>'@'<egress-ip>'`, or a `'<user>'@'%'` login with `REQUIRE SSL`).
-   Find the egress IP with `oc run ip --rm -i --restart=Never --image=registry.access.redhat.com/ubi9/ubi-minimal -- curl -s https://checkip.amazonaws.com`.
-2. Put that login in the `saas-exam-mysql` secret, shared by the three data services:
-   `oc create secret generic saas-exam-mysql --from-literal=SPRING_DATASOURCE_USERNAME=<user> --from-literal=SPRING_DATASOURCE_PASSWORD=<password>`
-   The `<service>-db` secrets keep the H2 logins, so `./scripts/deploy-backend.sh` (H2) still works afterwards.
-3. `OVERLAY=mysql ./scripts/deploy-backend.sh`
-
-Switching from H2 leaves the old `<service>-data` volumes in place; delete them with
-`oc delete pvc catalog-service-data question-service-data exam-service-data` once you no longer need the H2 data.
-The Developer Sandbox's egress IP is not guaranteed to stay the same; if the connection stops, check it again.
+Projects that ran the earlier H2 setup still have its volumes and secrets; remove them with
+`oc delete pvc catalog-service-data question-service-data exam-service-data` and
+`oc delete secret catalog-service-db question-service-db exam-service-db`.
 
 ### How it is configured
 
 - **Builds**: each BuildConfig runs the Red Hat OpenJDK 17 S2I builder on the multi-module repo with
   `-pl <service> -am`, so it builds only that service and `common-lib`; `MAVEN_S2I_ARTIFACT_DIRS` points the builder
   at that module's `target/` to pick up the jar.
-- **Config**: each service's `application.yml` is overridden by its ConfigMap: `PORT`, `DB_URL` (the H2 file
-  moves to `/data` on the service's volume, or the MySQL URL), the other services' URLs, and the H2 web console off.
-- **Secrets**: `SPRING_DATASOURCE_USERNAME` / `SPRING_DATASOURCE_PASSWORD` come from each service's `<service>-db`
-  Secret, which is never committed (see `secret.example.yaml`). With H2, the database is created with these
-  credentials on first start, so don't change them afterwards.
-- **Health**: probes use Spring Boot Actuator's `/actuator/health/liveness` and `/readiness`. The data services
-  allow 5 minutes to start because the first start on H2 runs the Flyway seed.
-- **Scaling**: H2 in file mode allows one process per database and the volumes are ReadWriteOnce, so with H2 the
-  three data services run 1 replica each with the `Recreate` strategy. With MySQL they use rolling updates.
+- **Database**: each data service's ConfigMap sets `DB_URL` to `etfdb_dev` and only connects: nothing is ever created
+  in the database (`createDatabaseIfNotExist=false`, `SPRING_FLYWAY_ENABLED=false`, Hibernate `ddl-auto=validate`,
+  which stops the service at startup if a table does not match the code). TLS is required (`sslMode=REQUIRED`).
+- **Secrets**: `SPRING_DATASOURCE_USERNAME` / `SPRING_DATASOURCE_PASSWORD` come from the `saas-exam-mysql` Secret,
+  shared by the three data services (see `base/secret.example.yaml`).
+- **Health**: probes use Spring Boot Actuator's `/actuator/health/liveness` and `/readiness`.
+- **Scaling**: the services are stateless (the data is in MySQL), so they roll without downtime and can run more copies.
+  Each Deployment keeps 2 old ReplicaSets; the Developer Sandbox allows 30 per project.
 - **TLS**: the gateway Route uses edge termination on the cluster's default certificate and redirects HTTP to
   HTTPS. `/internal/**` endpoints are not routed by the gateway, so they stay inside the cluster.
 

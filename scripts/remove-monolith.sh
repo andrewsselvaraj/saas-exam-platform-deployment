@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Removes the old single-backend deployment (exam-backend) after the microservices are up.
-# This deletes the monolith's H2 data volume; the microservices seed their own databases.
+# This deletes the monolith's data volume. The microservices keep their data in MySQL.
 set -euo pipefail
 
 NAMESPACE="${NAMESPACE:-$(oc project -q)}"
