@@ -31,6 +31,41 @@ spec:
         runAsNonRoot: true
         seccompProfile:
           type: RuntimeDefault
+      initContainers:
+        # Sidecar (restartPolicy: Always): starts before the app and stays up. Forwards 127.0.0.1:3306
+        # in this pod to MySQL on the database server over SSH, so MySQL needs no public port.
+        - name: mysql-tunnel
+          image: mysql-tunnel:latest
+          imagePullPolicy: Always
+          restartPolicy: Always
+          envFrom:
+            - configMapRef:
+                name: mysql-tunnel-config
+          # The app only starts once the tunnel accepts connections.
+          startupProbe:
+            exec:
+              command: ["bash", "-c", "echo > /dev/tcp/127.0.0.1/3306"]
+            periodSeconds: 3
+            failureThreshold: 40
+          livenessProbe:
+            exec:
+              command: ["bash", "-c", "echo > /dev/tcp/127.0.0.1/3306"]
+            periodSeconds: 20
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              memory: 64Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: tunnel-key
+              mountPath: /etc/tunnel
+              readOnly: true
       containers:
         - name: question-service
           image: question-service:latest
@@ -75,4 +110,10 @@ spec:
             allowPrivilegeEscalation: false
             capabilities:
               drop: ["ALL"]
+      volumes:
+        # SSH private key + pinned server host key (see ../mysql-tunnel/secret.example.yaml).
+        - name: tunnel-key
+          secret:
+            secretName: mysql-ssh-tunnel
+            defaultMode: 0440
       terminationGracePeriodSeconds: 45

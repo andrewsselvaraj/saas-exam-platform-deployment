@@ -8,6 +8,8 @@ resources:
   - catalog-service
   - question-service
   - exam-service
+  # SSH tunnel image used by the data services' sidecar to reach MySQL.
+  - mysql-tunnel
 
 labels:
   - pairs:
