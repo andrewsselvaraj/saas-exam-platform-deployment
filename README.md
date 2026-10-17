@@ -22,6 +22,7 @@ backend/
   docker/Dockerfile                 image build outside the cluster, --build-arg SERVICE=...
   openshift/base/<service>/         ImageStream, BuildConfig (S2I), ConfigMap, Deployment, Service (+ Route for the gateway)
   openshift/base/secret.example.yaml  template for the saas-exam-mysql login (never applied)
+  openshift/base/mysql-tunnel/      SSH tunnel sidecar image (BuildConfig), its settings, mysql-ssh-tunnel template
   openshift/overlays/sandbox/       Developer Sandbox: current project, one gateway copy
 scripts/
   deploy-backend.sh                 checks the MySQL secret, applies the overlay, builds all four services, rolls out
@@ -30,11 +31,26 @@ scripts/
 
 ### Before the first deploy
 
-1. **Network**: the MySQL server must accept connections on 3306 from the cluster: `bind-address = 0.0.0.0`, the
-   firewall allowing the cluster's egress IPs, and the MySQL login allowed from them. Find the egress IP with
-   `oc run ip --rm -i --restart=Never --image=registry.access.redhat.com/ubi9/ubi-minimal -- curl -s https://checkip.amazonaws.com`.
-   The Developer Sandbox uses more than one egress IP and they can change.
-2. **Login**: store the MySQL login once (never in git):
+1. **SSH tunnel**: MySQL needs no public port. Each data service has a sidecar that forwards `127.0.0.1:3306` in its
+   pod to the server's own MySQL over SSH (port 22), so the cluster's changing egress IPs don't matter.
+   - Create the key and store it with the server's pinned host key (see `base/mysql-tunnel/secret.example.yaml`):
+     ```bash
+     ssh-keygen -t ed25519 -N "" -f id_ed25519
+     ssh-keyscan -t ed25519 63.142.240.31 > known_hosts   # check: ssh-keygen -lf known_hosts
+     oc create secret generic mysql-ssh-tunnel --from-file=id_ed25519 --from-file=known_hosts
+     ```
+   - On the server, a tunnel-only user whose key can only forward to MySQL:
+     ```bash
+     sudo useradd --create-home --shell /usr/sbin/nologin ocp-tunnel
+     sudo install -d -m 700 -o ocp-tunnel -g ocp-tunnel /home/ocp-tunnel/.ssh
+     echo 'restrict,port-forwarding,permitopen="127.0.0.1:3306" <contents of id_ed25519.pub>' \
+       | sudo tee /home/ocp-tunnel/.ssh/authorized_keys
+     sudo chown ocp-tunnel:ocp-tunnel /home/ocp-tunnel/.ssh/authorized_keys
+     sudo chmod 600 /home/ocp-tunnel/.ssh/authorized_keys
+     ```
+   SSH host, port and user are in `base/mysql-tunnel/configmap.yaml`.
+2. **Login**: store the MySQL login once (never in git). Through the tunnel MySQL sees a local connection, so the
+   login must be allowed from `localhost`/`127.0.0.1`:
    ```bash
    oc create secret generic saas-exam-mysql \
      --from-literal=SPRING_DATASOURCE_USERNAME=<user> --from-literal=SPRING_DATASOURCE_PASSWORD=<password>
