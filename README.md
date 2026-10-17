@@ -26,6 +26,7 @@ backend/
   openshift/overlays/sandbox/       Developer Sandbox: current project, one gateway copy
 scripts/
   deploy-backend.sh                 checks the MySQL secret, applies the overlay, builds all four services, rolls out
+  test-tunnel.sh                    checks from inside OpenShift that the SSH tunnel reaches MySQL
   remove-monolith.sh                removes the old single exam-backend deployment, after asking
 ```
 
