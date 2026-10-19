@@ -35,14 +35,26 @@ spec:
         - name: frontend
           image: frontend:latest
           imagePullPolicy: Always
+          # Fill in nginx.conf's DNS server and namespace, then run nginx on the result.
+          command: ["/bin/sh", "-c"]
+          args:
+            - >-
+              resolver=$(awk '/^nameserver/ {print $2; exit}' /etc/resolv.conf) &&
+              sed -e "s/__RESOLVER__/$resolver/" -e "s/__NAMESPACE__/$POD_NAMESPACE/"
+              /etc/nginx/templates/nginx.conf > /tmp/nginx.conf &&
+              exec nginx -c /tmp/nginx.conf -g 'daemon off;'
+          env:
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
           ports:
             - name: http
               containerPort: 8080
               protocol: TCP
           volumeMounts:
             - name: nginx-config
-              mountPath: /etc/nginx/nginx.conf
-              subPath: nginx.conf
+              mountPath: /etc/nginx/templates
               readOnly: true
           resources:
             requests:

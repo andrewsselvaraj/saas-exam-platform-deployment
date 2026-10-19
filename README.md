@@ -125,6 +125,10 @@ Redeploy after pushing frontend changes with `oc start-build frontend --follow`.
 - **nginx**: `base/nginx.conf` is mounted as a ConfigMap. It listens on 8080, sends unknown paths to `index.html` so
   Angular routes work, serves `/healthz` for the probes, never caches `index.html` and caches the hashed bundles for a
   year. Editing the file and re-applying the overlay rolls the pods.
+- **API**: nginx forwards `/api/**` to the `api-gateway` Service, so the browser calls the API on the frontend's own
+  origin and the gateway needs no CORS. The gateway's name is looked up per request (the Deployment fills the pod's
+  DNS server and namespace into `nginx.conf` at startup), so the frontend starts before the backend is deployed and
+  `/api` answers 502 until it is.
 
 ### Building the images outside OpenShift
 
