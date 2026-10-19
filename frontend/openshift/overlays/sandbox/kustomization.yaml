@@ -1,0 +1,17 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Red Hat Developer Sandbox settings on top of the base.
+# No namespace: everything goes into the project you are logged in to.
+resources:
+  - ../../base
+
+patches:
+  # One copy is enough here; the Sandbox scales everything to zero after 12 hours anyway.
+  - target:
+      kind: Deployment
+      name: frontend
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1

@@ -100,6 +100,32 @@ Projects that ran the earlier H2 setup still have its volumes and secrets; remov
 - **TLS**: the gateway Route uses edge termination on the cluster's default certificate and redirects HTTP to
   HTTPS. `/internal/**` endpoints are not routed by the gateway, so they stay inside the cluster.
 
+## Frontend on OpenShift
+
+Deploys the [saas-exam-platform-frontend](https://github.com/andrewsselvaraj/saas-exam-platform-frontend)
+Angular 18 app as static files served by nginx, behind its own public HTTPS Route. It needs no secrets.
+
+```
+frontend/
+  openshift/base/                   ImageStream, BuildConfig (Docker, Dockerfile inline), nginx.conf, Deployment, Service, Route
+  openshift/overlays/sandbox/       Developer Sandbox: current project, one copy
+scripts/
+  deploy-frontend.sh                applies the overlay, builds the image, rolls out, prints the URL
+```
+
+```bash
+./scripts/deploy-frontend.sh
+```
+
+It prints the app's URL, e.g. `https://frontend-<namespace>.apps.<cluster-domain>/`.
+Redeploy after pushing frontend changes with `oc start-build frontend --follow`.
+
+- **Build**: the frontend repo holds code only; the Dockerfile lives in `base/buildconfig.yaml`. It runs `npm ci` and
+  `npm run build` on UBI Node.js 20, then copies `dist/saas-exam-platform-frontend/browser` into UBI nginx 1.24.
+- **nginx**: `base/nginx.conf` is mounted as a ConfigMap. It listens on 8080, sends unknown paths to `index.html` so
+  Angular routes work, serves `/healthz` for the probes, never caches `index.html` and caches the hashed bundles for a
+  year. Editing the file and re-applying the overlay rolls the pods.
+
 ### Building the images outside OpenShift
 
 From a checkout of the backend repo, once per service:

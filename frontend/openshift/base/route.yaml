@@ -1,0 +1,14 @@
+# Public URL of the web app. Leave spec.host empty to get frontend-<namespace>.apps.<cluster-domain>.
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: frontend
+spec:
+  to:
+    kind: Service
+    name: frontend
+  port:
+    targetPort: http
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect

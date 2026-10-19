@@ -1,0 +1,20 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# The Angular web app (saas-exam-platform-frontend), served by nginx behind a public HTTPS Route.
+resources:
+  - imagestream.yaml
+  - buildconfig.yaml
+  - deployment.yaml
+  - service.yaml
+  - route.yaml
+
+configMapGenerator:
+  - name: frontend-nginx
+    files:
+      - nginx.conf
+
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: saas-exam-platform
+      app.kubernetes.io/name: frontend

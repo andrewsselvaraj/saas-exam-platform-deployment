@@ -1,0 +1,37 @@
+# Builds the Angular frontend from its git repo with the Dockerfile below, kept here so the frontend repo holds code only.
+# Stage 1 runs `npm ci` and `ng build` on UBI Node.js 20; stage 2 copies the static files into UBI nginx.
+# Start a build with: oc start-build frontend --follow
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: frontend
+spec:
+  runPolicy: Serial
+  source:
+    type: Git
+    git:
+      uri: https://github.com/andrewsselvaraj/saas-exam-platform-frontend.git
+      ref: main
+    dockerfile: |
+      FROM registry.access.redhat.com/ubi9/nodejs-20 AS build
+      COPY --chown=1001:0 package.json package-lock.json ./
+      RUN npm ci --no-audit --no-fund
+      COPY --chown=1001:0 . .
+      RUN npm run build
+
+      FROM registry.access.redhat.com/ubi9/nginx-124
+      COPY --from=build /opt/app-root/src/dist/saas-exam-platform-frontend/browser /opt/app-root/src
+      CMD ["nginx", "-g", "daemon off;"]
+  strategy:
+    type: Docker
+    dockerStrategy: {}
+  output:
+    to:
+      kind: ImageStreamTag
+      name: frontend:latest
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      memory: 2Gi
